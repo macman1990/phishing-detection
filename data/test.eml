@@ -1,0 +1,16 @@
+From: "PayPal Support" <support@paypa1.com>
+Reply-To: attacker@gmail.com
+To: victim@example.com
+Subject: Urgent: Your account will be suspended!
+Date: Mon, 24 Oct 2024 10:00:00 +0000
+Authentication-Results: mx.example.com;
+   spf=fail smtp.mailfrom=paypa1.com;
+   dkim=fail header.d=paypa1.com;
+   dmarc=fail action=none header.from=paypa1.com
+
+Dear Customer,
+
+Your PayPal account has been limited. Click below to verify:
+http://paypa1.secure-login.xyz/verify?token=abc123
+
+Failure to verify within 24 hours will result in suspension.

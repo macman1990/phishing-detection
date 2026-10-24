@@ -1,0 +1,16 @@
+{
+  "dataset_size": 58645,
+  "accuracy": 0.836,
+  "precision": 0.857,
+  "recall": 0.817,
+  "f1_score": 0.836,
+  "auc_roc": 0.911,
+  "false_positive_rate": 0.149,
+  "avg_latency_ms": 4.07,
+  "confusion_matrix": {
+    "TP": 7489,
+    "TN": 7175,
+    "FP": 1253,
+    "FN": 1677
+  }
+}
