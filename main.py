@@ -475,133 +475,178 @@ def render_verdict(report, siem_result):
 def render_scores(bd):
     import plotly.graph_objects as go
 
-    scores = {
-        "Header":   bd.get("header_score",   0),
-        "Content":  bd.get("content_score",  0),
-        "URL":      bd.get("url_score",      0),
-        "VT":       bd.get("vt_score",       0),
-        "URLhaus":  bd.get("urlhaus_score",  0),
-        "ML":       bd.get("ml_score",       0),
-        "Advanced": bd.get("advanced_score", 0),
-    }
-    final = sum(
-        v * w for v, w in zip(scores.values(),
-        [0.22, 0.18, 0.18, 0.14, 0.08, 0.10, 0.10])
-    )
-
-    bar_colors = [
-        "#ff3b30" if s >= 70 else
-        "#ff9500" if s >= 40 else
-        "#34c759"
-        for s in scores.values()
+    labels = ["Header & Auth","Content","URL Rules",
+              "VirusTotal","URLhaus","ML Model","Advanced"]
+    values = [
+        bd.get("header_score",   0),
+        bd.get("content_score",  0),
+        bd.get("url_score",      0),
+        bd.get("vt_score",       0),
+        bd.get("urlhaus_score",  0),
+        bd.get("ml_score",       0),
+        bd.get("advanced_score", 0),
     ]
+    weights = [0.22, 0.18, 0.18, 0.14, 0.08, 0.10, 0.10]
+    final   = int(sum(v*w for v,w in zip(values, weights)))
 
-    fig = go.Figure()
-    fig.add_trace(go.Bar(
-        x=list(scores.keys()),
-        y=list(scores.values()),
-        marker_color=bar_colors,
-        marker_line_width=0,
-        text=[str(v) for v in scores.values()],
+    def score_color(s):
+        if s >= 70: return "#ff3b30"
+        if s >= 40: return "#ff9500"
+        return "#34c759"
+
+    bar_colors = [score_color(s) for s in values]
+
+    # ── Horizontal Bar Chart ──
+    fig_bar = go.Figure()
+    fig_bar.add_trace(go.Bar(
+        x=values,
+        y=labels,
+        orientation="h",
+        marker=dict(
+            color=bar_colors,
+            line=dict(width=0),
+        ),
+        text=[f"  {v}/100" for v in values],
         textposition="outside",
-        textfont=dict(size=11, color="#1d1d1f"),
+        textfont=dict(
+            size=12,
+            color="#1d1d1f",
+            family="Inter, sans-serif",
+        ),
+        hovertemplate="<b>%{y}</b><br>Score: %{x}/100<extra></extra>",
     ))
-    fig.update_layout(
-        height=220,
-        margin=dict(t=20, b=0, l=0, r=0),
+    fig_bar.update_layout(
+        height=280,
+        margin=dict(t=10, b=10, l=0, r=60),
         paper_bgcolor="white",
         plot_bgcolor="white",
-        yaxis=dict(range=[0,115], showgrid=True,
-                   gridcolor="#f5f5f7", zeroline=False,
-                   tickfont=dict(size=10, color="#6e6e73")),
-        xaxis=dict(tickfont=dict(size=11, color="#1d1d1f")),
-        showlegend=False,
-        font=dict(family="Inter, sans-serif"),
-        bargap=0.3,
-    )
-
-    # Radar Chart
-    categories = list(scores.keys())
-    values     = list(scores.values())
-    values_closed = values + [values[0]]
-    cats_closed   = categories + [categories[0]]
-
-    fig_radar = go.Figure()
-    fig_radar.add_trace(go.Scatterpolar(
-        r=values_closed,
-        theta=cats_closed,
-        fill="toself",
-        fillcolor="rgba(0,113,227,0.15)",
-        line=dict(color="#0071e3", width=2),
-        marker=dict(size=5, color="#0071e3"),
-    ))
-    fig_radar.update_layout(
-        polar=dict(
-            bgcolor="white",
-            radialaxis=dict(
-                visible=True, range=[0,100],
-                tickfont=dict(size=8, color="#6e6e73"),
-                gridcolor="#e5e5ea",
-            ),
-            angularaxis=dict(
-                tickfont=dict(size=10, color="#1d1d1f"),
-                gridcolor="#e5e5ea",
-            ),
+        xaxis=dict(
+            range=[0, 130],
+            showgrid=True,
+            gridcolor="#f5f5f7",
+            zeroline=False,
+            tickfont=dict(size=10, color="#aeaeb2"),
+            showticklabels=False,
         ),
-        height=220,
-        margin=dict(t=20, b=20, l=20, r=20),
-        paper_bgcolor="white",
+        yaxis=dict(
+            tickfont=dict(size=12, color="#1d1d1f",
+                          family="Inter, sans-serif"),
+            showgrid=False,
+            automargin=True,
+        ),
         showlegend=False,
+        bargap=0.35,
+        font=dict(family="Inter, sans-serif"),
+    )
+    for x0, x1, color in [
+        (0,  25,  "rgba(52,199,89,0.04)"),
+        (25, 50,  "rgba(255,149,0,0.04)"),
+        (50, 75,  "rgba(255,149,0,0.07)"),
+        (75, 100, "rgba(255,59,48,0.06)"),
+    ]:
+        fig_bar.add_vrect(
+            x0=x0, x1=x1,
+            fillcolor=color,
+            layer="below",
+            line_width=0,
+        )
+
+    # ── Gauge Chart ──
+    fig_gauge = go.Figure(go.Indicator(
+        mode="gauge+number+delta",
+        value=final,
+        delta={
+            "reference": 50,
+            "increasing": {"color": "#ff3b30"},
+            "decreasing": {"color": "#34c759"},
+            "font": {"size": 12},
+        },
+        number={
+            "font": {"size": 36, "color": "#1d1d1f",
+                     "family": "Inter, sans-serif"},
+            "suffix": "/100",
+        },
+        title={
+            "text": "Final Risk Score",
+            "font": {"size": 13, "color": "#6e6e73",
+                     "family": "Inter, sans-serif"},
+        },
+        gauge={
+            "axis": {
+                "range": [0, 100],
+                "tickwidth": 1,
+                "tickcolor": "#e5e5ea",
+                "tickfont":  {"size": 9, "color": "#aeaeb2"},
+                "nticks": 5,
+            },
+            "bar":  {"color": score_color(final), "thickness": 0.2},
+            "bgcolor": "white",
+            "borderwidth": 0,
+            "steps": [
+                {"range": [0,  25],  "color": "#f0faf0"},
+                {"range": [25, 50],  "color": "#fffbeb"},
+                {"range": [50, 75],  "color": "#fff5e6"},
+                {"range": [75, 100], "color": "#fff0f0"},
+            ],
+            "threshold": {
+                "line":      {"color": score_color(final), "width": 3},
+                "thickness": 0.85,
+                "value":     final,
+            },
+        }
+    ))
+    fig_gauge.update_layout(
+        height=240,
+        margin=dict(t=30, b=10, l=20, r=20),
+        paper_bgcolor="white",
         font=dict(family="Inter, sans-serif"),
     )
 
-    col1, col2 = st.columns(2)
+    # ── Render ──
+    col1, col2 = st.columns([3, 2])
+
     with col1:
-        st.markdown('<div class="card"><div class="card-title">Score by Layer</div>',
-                    unsafe_allow_html=True)
-        st.plotly_chart(fig, width="stretch",
-                        config={"displayModeBar": False})
-        st.markdown('</div>', unsafe_allow_html=True)
-    with col2:
-        st.markdown('<div class="card"><div class="card-title">Risk Radar</div>',
-                    unsafe_allow_html=True)
-        st.plotly_chart(fig_radar, width="stretch",
+        st.markdown("""
+        <div class="card">
+            <div class="card-title">Detection Layers Score</div>
+            <div style="display:flex; gap:16px; margin-bottom:10px;">
+                <span style="font-size:11px; color:#34c759;
+                             font-weight:600;">● Low Risk</span>
+                <span style="font-size:11px; color:#ff9500;
+                             font-weight:600;">● Medium Risk</span>
+                <span style="font-size:11px; color:#ff3b30;
+                             font-weight:600;">● High Risk</span>
+            </div>
+        """, unsafe_allow_html=True)
+        st.plotly_chart(fig_bar, width="stretch",
                         config={"displayModeBar": False})
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # Score cards below charts
-    st.markdown(f"""
-    <div class="score-grid" style="margin-top:10px;">
-        <div class="score-item">
-            <div class="score-num">{html.escape(str(bd.get("header_score",0)))}</div>
-            <div class="score-label">Header & Auth</div>
+    with col2:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.plotly_chart(fig_gauge, width="stretch",
+                        config={"displayModeBar": False})
+
+        # Risk Level Labels
+        level_color = score_color(final)
+        level_text  = (
+            "CRITICAL RISK" if final >= 75 else
+            "HIGH RISK"     if final >= 50 else
+            "MEDIUM RISK"   if final >= 25 else
+            "LOW RISK"
+        )
+        st.markdown(f"""
+        <div style="text-align:center; margin-top:-8px;">
+            <span style="background:{level_color}22;
+                         color:{level_color};
+                         font-size:12px; font-weight:700;
+                         padding:4px 14px; border-radius:20px;
+                         letter-spacing:0.5px;">
+                {level_text}
+            </span>
         </div>
-        <div class="score-item">
-            <div class="score-num">{html.escape(str(bd.get("content_score",0)))}</div>
-            <div class="score-label">Content</div>
-        </div>
-        <div class="score-item">
-            <div class="score-num">{html.escape(str(bd.get("url_score",0)))}</div>
-            <div class="score-label">URL Rules</div>
-        </div>
-        <div class="score-item">
-            <div class="score-num">{html.escape(str(bd.get("vt_score",0)))}</div>
-            <div class="score-label">VirusTotal</div>
-        </div>
-        <div class="score-item">
-            <div class="score-num">{html.escape(str(bd.get("urlhaus_score",0)))}</div>
-            <div class="score-label">URLhaus</div>
-        </div>
-        <div class="score-item">
-            <div class="score-num">{html.escape(str(bd.get("ml_score",0)))}</div>
-            <div class="score-label">ML Model</div>
-        </div>
-        <div class="score-item">
-            <div class="score-num">{html.escape(str(bd.get("advanced_score",0)))}</div>
-            <div class="score-label">Advanced</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
 
 def render_email_info(report):
@@ -987,41 +1032,49 @@ with tab2:
 
         import plotly.graph_objects as go
 
+        vc = verdict_color
         fig_gauge = go.Figure(go.Indicator(
             mode="gauge+number",
             value=combined,
-            domain={"x": [0, 1], "y": [0, 1]},
-            title={"text": "Risk Score", "font": {"size": 14,
-                                                   "color": "#6e6e73"}},
-            number={"font": {"size": 32, "color": "#1d1d1f"},
-                    "suffix": "/100"},
+            number={
+                "font": {"size": 40, "color": "#1d1d1f",
+                         "family": "Inter, sans-serif"},
+                "suffix": "/100",
+            },
+            title={
+                "text": "Combined Risk Score",
+                "font": {"size": 12, "color": "#6e6e73",
+                         "family": "Inter, sans-serif"},
+            },
             gauge={
-                "axis": {"range": [0, 100],
-                         "tickfont": {"size": 10, "color": "#6e6e73"},
-                         "tickwidth": 1,
-                         "tickcolor": "#e5e5ea"},
-                "bar": {"color": verdict_color, "thickness": 0.25},
+                "axis": {
+                    "range": [0, 100],
+                    "tickwidth": 1,
+                    "tickcolor": "#e5e5ea",
+                    "tickfont":  {"size": 9, "color": "#aeaeb2"},
+                    "nticks": 5,
+                },
+                "bar":  {"color": vc, "thickness": 0.22},
                 "bgcolor": "white",
                 "borderwidth": 0,
                 "steps": [
-                    {"range": [0, 25], "color": "#e8f5e9"},
-                    {"range": [25, 50], "color": "#fff8e1"},
-                    {"range": [50, 75], "color": "#fff3e0"},
-                    {"range": [75, 100], "color": "#ffebee"},
+                    {"range": [0,  25],  "color": "#f0faf0"},
+                    {"range": [25, 50],  "color": "#fffbeb"},
+                    {"range": [50, 75],  "color": "#fff5e6"},
+                    {"range": [75, 100], "color": "#fff0f0"},
                 ],
                 "threshold": {
-                    "line": {"color": verdict_color, "width": 3},
-                    "thickness": 0.8,
-                    "value": combined
-                }
+                    "line":      {"color": vc, "width": 3},
+                    "thickness": 0.85,
+                    "value":     combined,
+                },
             }
         ))
         fig_gauge.update_layout(
-            height=220,
-            margin=dict(t=30, b=0, l=20, r=20),
+            height=240,
+            margin=dict(t=30, b=10, l=20, r=20),
             paper_bgcolor="white",
-            plot_bgcolor="white",
-            font=dict(family="Inter, sans-serif")
+            font=dict(family="Inter, sans-serif"),
         )
 
         api_names = ["Rule Engine", "VirusTotal", "URLhaus",
@@ -1042,24 +1095,38 @@ with tab2:
         fig_bar = go.Figure(go.Bar(
             x=api_names,
             y=api_scores,
-            marker_color=bar_colors,
-            marker_line_width=0,
-            text=[str(score) for score in api_scores],
+            marker=dict(color=bar_colors, line=dict(width=0)),
+            text=[f"{score}/100" for score in api_scores],
             textposition="outside",
-            textfont=dict(size=11, color="#1d1d1f"),
+            textfont=dict(size=11, color="#1d1d1f",
+                          family="Inter, sans-serif"),
+            hovertemplate="<b>%{x}</b><br>Score: %{y}/100<extra></extra>",
         ))
         fig_bar.update_layout(
-            height=220,
-            margin=dict(t=20, b=0, l=0, r=0),
+            height=240,
+            margin=dict(t=30, b=10, l=0, r=0),
             paper_bgcolor="white",
             plot_bgcolor="white",
-            yaxis=dict(range=[0, 110], showgrid=True,
-                       gridcolor="#f5f5f7", zeroline=False,
-                       tickfont=dict(size=10, color="#6e6e73")),
-            xaxis=dict(tickfont=dict(size=11, color="#1d1d1f")),
+            yaxis=dict(
+                range=[0, 130],
+                showgrid=True,
+                gridcolor="#f5f5f7",
+                zeroline=False,
+                tickfont=dict(size=10, color="#aeaeb2"),
+                showticklabels=False,
+            ),
+            xaxis=dict(
+                tickfont=dict(size=11, color="#1d1d1f",
+                              family="Inter, sans-serif"),
+            ),
             showlegend=False,
+            bargap=0.35,
             font=dict(family="Inter, sans-serif"),
-            bargap=0.3,
+            title=dict(
+                text="Score by Intelligence Source",
+                font=dict(size=12, color="#6e6e73"),
+                x=0.5,
+            ),
         )
 
         col_g, col_b = st.columns(2)
