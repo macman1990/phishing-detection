@@ -1,16 +1,16 @@
 {
-  "dataset_size": 58645,
-  "accuracy": 0.836,
-  "precision": 0.857,
-  "recall": 0.817,
-  "f1_score": 0.836,
-  "auc_roc": 0.911,
-  "false_positive_rate": 0.149,
-  "avg_latency_ms": 4.07,
+  "dataset_size": 99004,
+  "accuracy": 0.88,
+  "precision": 0.871,
+  "recall": 0.801,
+  "f1_score": 0.834,
+  "auc_roc": 0.941,
+  "false_positive_rate": 0.073,
+  "avg_latency_ms": 3.988,
   "confusion_matrix": {
-    "TP": 7489,
-    "TN": 7175,
-    "FP": 1253,
-    "FN": 1677
+    "TP": 9078,
+    "TN": 17023,
+    "FP": 1342,
+    "FN": 2259
   }
 }

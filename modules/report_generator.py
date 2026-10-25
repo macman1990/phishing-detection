@@ -2,406 +2,377 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import cm
+from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer,
-    Table, TableStyle, HRFlowable, KeepTogether
+    Table, TableStyle, HRFlowable
 )
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from datetime import datetime
 import os
 
+# ── Palette ────────────────────────────────────────
+BLUE    = colors.HexColor("#0071e3")
+DARK    = colors.HexColor("#1d1d1f")
+GRAY    = colors.HexColor("#f5f5f7")
+MUTED   = colors.HexColor("#6e6e73")
+WHITE   = colors.white
+GREEN   = colors.HexColor("#34c759")
+RED     = colors.HexColor("#ff3b30")
+ORANGE  = colors.HexColor("#ff9500")
+YELLOW  = colors.HexColor("#ffcc00")
+LGRAY   = colors.HexColor("#e5e5ea")
 
-# ── Color Palette ──────────────────────────────────
-C_BG        = colors.HexColor("#0e1117")
-C_DARK      = colors.HexColor("#1e2130")
-C_ACCENT    = colors.HexColor("#64ffda")
-C_TEXT      = colors.HexColor("#ccd6f6")
-C_MUTED     = colors.HexColor("#8892b0")
-C_RED       = colors.HexColor("#ff4444")
-C_ORANGE    = colors.HexColor("#ff8800")
-C_YELLOW    = colors.HexColor("#ffcc00")
-C_GREEN     = colors.HexColor("#00cc44")
-C_WHITE     = colors.white
-C_CRITICAL  = colors.HexColor("#cc0000")
-C_HIGH      = colors.HexColor("#e65c00")
-C_MEDIUM    = colors.HexColor("#ccaa00")
-C_LOW       = colors.HexColor("#007700")
-
-
-def _verdict_color(verdict):
-    return {
-        "CRITICAL": C_CRITICAL,
-        "HIGH":     C_HIGH,
-        "MEDIUM":   C_MEDIUM,
-        "LOW":      C_LOW,
-    }.get(verdict, C_DARK)
-
+def _vc(verdict):
+    return {"CRITICAL": RED, "HIGH": ORANGE,
+            "MEDIUM": YELLOW, "LOW": GREEN}.get(verdict, BLUE)
 
 # ── Styles ─────────────────────────────────────────
-def _styles():
-    return {
-        "h1": ParagraphStyle(
-            "h1", fontSize=22, fontName="Helvetica-Bold",
-            textColor=C_WHITE, spaceAfter=4, alignment=TA_LEFT
-        ),
-        "h2": ParagraphStyle(
-            "h2", fontSize=13, fontName="Helvetica-Bold",
-            textColor=C_ACCENT, spaceBefore=10, spaceAfter=4
-        ),
-        "body": ParagraphStyle(
-            "body", fontSize=9, fontName="Helvetica",
-            textColor=C_TEXT, spaceAfter=3
-        ),
-        "muted": ParagraphStyle(
-            "muted", fontSize=8, fontName="Helvetica",
-            textColor=C_MUTED
-        ),
-        "code": ParagraphStyle(
-            "code", fontSize=8, fontName="Courier",
-            textColor=C_ACCENT, spaceAfter=2
-        ),
-        "center": ParagraphStyle(
-            "center", fontSize=9, fontName="Helvetica",
-            textColor=C_TEXT, alignment=TA_CENTER
-        ),
-        "right": ParagraphStyle(
-            "right", fontSize=8, fontName="Helvetica",
-            textColor=C_MUTED, alignment=TA_RIGHT
-        ),
-    }
-
+H1 = ParagraphStyle("h1", fontSize=22, fontName="Helvetica-Bold",
+                    textColor=DARK, spaceAfter=2)
+H2 = ParagraphStyle("h2", fontSize=11, fontName="Helvetica-Bold",
+                    textColor=BLUE, spaceBefore=14, spaceAfter=6)
+BODY = ParagraphStyle("body", fontSize=9, fontName="Helvetica",
+                      textColor=DARK, spaceAfter=2)
+SMALL = ParagraphStyle("small", fontSize=8, fontName="Helvetica",
+                       textColor=MUTED)
+RIGHT = ParagraphStyle("right", fontSize=8, fontName="Helvetica",
+                       textColor=MUTED, alignment=TA_RIGHT)
+CENTER = ParagraphStyle("center", fontSize=9, fontName="Helvetica",
+                        textColor=DARK, alignment=TA_CENTER)
+BOLD = ParagraphStyle("bold", fontSize=9, fontName="Helvetica-Bold",
+                      textColor=DARK)
+CODE = ParagraphStyle("code", fontSize=8, fontName="Courier",
+                      textColor=DARK)
 
 # ── Table Style ────────────────────────────────────
-def _table_style(header_color=None):
-    hc = header_color or C_DARK
+def _ts(hdr_color=None):
+    hc = hdr_color or DARK
     return TableStyle([
-        ("BACKGROUND",    (0, 0), (-1, 0),  hc),
-        ("TEXTCOLOR",     (0, 0), (-1, 0),  C_WHITE),
-        ("FONTNAME",      (0, 0), (-1, 0),  "Helvetica-Bold"),
-        ("FONTSIZE",      (0, 0), (-1, 0),  9),
-        ("BACKGROUND",    (0, 1), (-1, -1), C_DARK),
-        ("TEXTCOLOR",     (0, 1), (-1, -1), C_TEXT),
-        ("FONTSIZE",      (0, 1), (-1, -1), 8),
-        ("FONTNAME",      (0, 1), (-1, -1), "Helvetica"),
-        ("ROWBACKGROUNDS",(0, 1), (-1, -1),
-         [C_DARK, colors.HexColor("#161a26")]),
-        ("GRID",          (0, 0), (-1, -1), 0.3, C_MUTED),
-        ("ALIGN",         (0, 0), (-1, -1), "LEFT"),
-        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING",    (0, 0), (-1, -1), 5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 8),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 8),
+        # Header
+        ("BACKGROUND",    (0,0), (-1,0),  hc),
+        ("TEXTCOLOR",     (0,0), (-1,0),  WHITE),
+        ("FONTNAME",      (0,0), (-1,0),  "Helvetica-Bold"),
+        ("FONTSIZE",      (0,0), (-1,0),  8),
+        # Body
+        ("FONTNAME",      (0,1), (-1,-1), "Helvetica"),
+        ("FONTSIZE",      (0,1), (-1,-1), 8),
+        ("TEXTCOLOR",     (0,1), (-1,-1), DARK),
+        ("ROWBACKGROUNDS",(0,1), (-1,-1), [WHITE, GRAY]),
+        # Grid
+        ("GRID",          (0,0), (-1,-1), 0.4, LGRAY),
+        ("LINEBELOW",     (0,0), (-1,0),  1,   hc),
+        # Padding
+        ("TOPPADDING",    (0,0), (-1,-1), 5),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 5),
+        ("LEFTPADDING",   (0,0), (-1,-1), 8),
+        ("RIGHTPADDING",  (0,0), (-1,-1), 8),
+        ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
     ])
 
+# ── Helpers ────────────────────────────────────────
+def _auth(val):
+    if val == "pass":  return "✓ PASS"
+    if val == "fail":  return "✗ FAIL"
+    return "— NONE"
 
-# ── Header ─────────────────────────────────────────
-def _build_header(elements, report, S):
-    # Top bar
-    header_table = Table([[
-        Paragraph("🛡️ PHISHING INCIDENT REPORT", S["h1"]),
+def _bar(score):
+    filled = int(score / 10)
+    return "█" * filled + "░" * (10 - filled)
+
+def _flag_cat(flag):
+    for k,v in {
+        "spf":"Auth","dkim":"Auth","dmarc":"Auth","reply_to":"Auth",
+        "keyword":"Content","urgency":"Content",
+        "credential":"Content","impersonation":"Content",
+        "lookalike":"URL","no_https":"URL","ip_as":"URL",
+        "special":"URL","redirect":"Redirect","domain":"Domain",
+        "whois":"WHOIS","unicode":"Unicode","attachment":"Attachment",
+        "ip":"IP","ssl":"SSL",
+    }.items():
+        if k in flag: return v
+    return "General"
+
+# ── Sections ───────────────────────────────────────
+def _header(report):
+    ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+    t = Table([[
+        Paragraph("PhishGuard", ParagraphStyle(
+            "pg", fontSize=20, fontName="Helvetica-Bold",
+            textColor=DARK)),
         Paragraph(
             f"AMIT SOC — Blue Team Pipeline<br/>"
-            f"<font size='8' color='#8892b0'>"
-            f"Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}"
-            f"</font>",
-            S["right"]
-        ),
-    ]], colWidths=[10*cm, 7*cm])
-    header_table.setStyle(TableStyle([
-        ("BACKGROUND",  (0, 0), (-1, -1), C_BG),
-        ("VALIGN",      (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            f"<font size='7' color='#6e6e73'>Generated: {ts}</font>",
+            RIGHT)
+    ]], colWidths=[9*cm, 8*cm])
+    t.setStyle(TableStyle([
+        ("VALIGN",(0,0),(-1,-1),"MIDDLE"),
+        ("LEFTPADDING",(0,0),(-1,-1),0),
+        ("RIGHTPADDING",(0,0),(-1,-1),0),
     ]))
-    elements.append(header_table)
-    elements.append(HRFlowable(
-        width="100%", thickness=2,
-        color=C_ACCENT, spaceAfter=8
-    ))
-
-
-# ── Verdict Banner ──────────────────────────────────
-def _build_verdict(elements, report, S):
-    verdict      = report["verdict"]
-    score        = report["final_score"]
-    verdict_col  = _verdict_color(verdict)
-    icons        = {
-        "CRITICAL": "⛔",
-        "HIGH":     "🔴",
-        "MEDIUM":   "🟡",
-        "LOW":      "🟢"
-    }
-
-    banner = Table([[
-        Paragraph(
-            f"<font size='14' color='white'><b>"
-            f"{icons.get(verdict,'')} {verdict} THREAT"
-            f"</b></font>",
-            S["center"]
-        ),
-        Paragraph(
-            f"<font size='22' color='white'><b>{score}</b></font>"
-            f"<br/><font size='9' color='#cccccc'>/ 100</font>",
-            S["center"]
-        ),
-        Paragraph(
-            f"<font size='9' color='#cccccc'>"
-            f"Alert ID<br/></font>"
-            f"<font size='10' color='white'><b>"
-            f"PHI-{datetime.utcnow().strftime('%Y%m%d')}"
-            f"</b></font>",
-            S["center"]
-        ),
-    ]], colWidths=[7*cm, 5*cm, 5*cm])
-
-    banner.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), verdict_col),
-        ("ALIGN",      (0, 0), (-1, -1), "CENTER"),
-        ("VALIGN",     (0, 0), (-1, -1), "MIDDLE"),
-        ("ROWHEIGHT",  (0, 0), (-1, -1), 45),
-        ("TOPPADDING", (0, 0), (-1, -1), 8),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-    ]))
-    elements.append(banner)
-    elements.append(Spacer(1, 0.3*cm))
-
-
-# ── Score Breakdown ─────────────────────────────────
-def _build_scores(elements, report, S):
-    elements.append(Paragraph("📊 Score Breakdown", S["h2"]))
-
-    bd = report["breakdown"]
-    scores = [
-        ("Header & Auth",  bd["header_score"],   "40% weight"),
-        ("Content",        bd["content_score"],  "20% weight"),
-        ("URL Analysis",   bd["url_score"],      "20% weight"),
-        ("VirusTotal",     bd["vt_score"],       "15% weight"),
-        ("URLhaus",        bd["urlhaus_score"],  "10% weight"),
-        ("ML Classifier",  bd["ml_score"],       "10% weight"),
+    return [
+        t,
+        HRFlowable(width="100%", thickness=1.5, color=BLUE, spaceAfter=8),
+        Paragraph("PHISHING INCIDENT REPORT", ParagraphStyle(
+            "rpt", fontSize=13, fontName="Helvetica-Bold",
+            textColor=MUTED, spaceAfter=6)),
     ]
 
-    rows = [["Component", "Score", "Weight", "Risk Bar"]]
-    for name, score, weight in scores:
-        bar_filled = int(score / 10)
-        bar = "█" * bar_filled + "░" * (10 - bar_filled)
-        rows.append([name, f"{score}/100", weight, bar])
+def _verdict_banner(report):
+    v     = report["verdict"]
+    score = report["final_score"]
+    vc    = _vc(v)
+    icons = {"CRITICAL":"⛔","HIGH":"🔴","MEDIUM":"🟡","LOW":"🟢"}
+    aid   = f"PHI-{datetime.utcnow().strftime('%Y%m%d')}"
 
+    t = Table([[
+        Paragraph(f"{icons.get(v,'')}  {v} THREAT", ParagraphStyle(
+            "vl", fontSize=13, fontName="Helvetica-Bold",
+            textColor=WHITE, alignment=TA_LEFT)),
+        Paragraph(f"<font size='24'><b>{score}</b></font>"
+                  f"<font size='10' color='#ffffff'> / 100</font>",
+                  ParagraphStyle("vs", fontSize=24,
+                                 fontName="Helvetica-Bold",
+                                 textColor=WHITE, alignment=TA_CENTER)),
+        Paragraph(
+            f"<font size='8' color='#ffffffcc'>Alert ID</font><br/>"
+            f"<font size='10'><b>{aid}</b></font>",
+            ParagraphStyle("va", fontSize=10, fontName="Helvetica-Bold",
+                           textColor=WHITE, alignment=TA_RIGHT)),
+    ]], colWidths=[7*cm, 5*cm, 5*cm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND",    (0,0), (-1,-1), vc),
+        ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
+        ("TOPPADDING",    (0,0), (-1,-1), 12),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 12),
+        ("LEFTPADDING",   (0,0), (-1,-1), 14),
+        ("RIGHTPADDING",  (0,0), (-1,-1), 14),
+        ("ROUNDEDCORNERS",[6]),
+    ]))
+    return [t, Spacer(1, 0.3*cm)]
+
+def _score_breakdown(report):
+    bd = report.get("breakdown", {})
+    rows = [["Component","Score","Weight","Risk Bar"]]
+    items = [
+        ("Header & Auth",  bd.get("header_score",0),   "22%"),
+        ("Content",        bd.get("content_score",0),  "18%"),
+        ("URL Analysis",   bd.get("url_score",0),      "18%"),
+        ("VirusTotal",     bd.get("vt_score",0),       "14%"),
+        ("URLhaus",        bd.get("urlhaus_score",0),  "8%"),
+        ("ML Classifier",  bd.get("ml_score",0),       "10%"),
+        ("Advanced",       bd.get("advanced_score",0), "10%"),
+    ]
+    for name, score, weight in items:
+        rows.append([name, f"{score}/100", weight, _bar(score)])
+    
+    fs = report.get("final_score", 0)
     rows.append([
-        Paragraph("<b>FINAL SCORE</b>", ParagraphStyle(
-            "bold", fontSize=9, fontName="Helvetica-Bold",
-            textColor=C_WHITE
-        )),
-        Paragraph(f"<b>{report['final_score']}/100</b>", ParagraphStyle(
-            "bold", fontSize=9, fontName="Helvetica-Bold",
-            textColor=C_ACCENT
-        )),
-        "—", "—"
+        Paragraph("<b>FINAL SCORE</b>", BOLD),
+        Paragraph(f"<b>{fs}/100</b>", ParagraphStyle(
+            "fs", fontSize=9, fontName="Helvetica-Bold",
+            textColor=_vc(report["verdict"]))),
+        "—", _bar(fs)
     ])
 
-    t = Table(rows, colWidths=[5*cm, 3*cm, 3*cm, 6*cm])
-    style = _table_style(C_DARK)
-    style.add("BACKGROUND", (0, len(rows)-1), (-1, len(rows)-1),
-              _verdict_color(report["verdict"]))
-    t.setStyle(style)
-    elements.append(t)
-    elements.append(Spacer(1, 0.3*cm))
+    t = Table(rows, colWidths=[5*cm, 2.5*cm, 2.5*cm, 7*cm])
+    s = _ts()
+    s.add("BACKGROUND", (0, len(rows)-1), (-1, len(rows)-1), GRAY)
+    s.add("FONTNAME",   (0, len(rows)-1), (-1, len(rows)-1),
+          "Helvetica-Bold")
+    t.setStyle(s)
+    return [Paragraph("Score Breakdown", H2), t, Spacer(1,0.2*cm)]
 
-
-# ── Email Info ──────────────────────────────────────
-def _build_email_info(elements, report, S):
-    elements.append(Paragraph("📧 Email Information", S["h2"]))
-
-    auth   = report["auth_results"]
-    sender = report["sender"]
-
-    def auth_str(val):
-        return "✅ PASS" if val == "pass" else "❌ FAIL" if val == "fail" else "⚠️ NONE"
-
+def _email_info(report):
+    auth = report.get("auth_results", {})
+    s    = report.get("sender", {})
     rows = [
         ["Field", "Value"],
-        ["Sender",    sender["raw"]],
-        ["Domain",    sender["domain"]],
-        ["Subject",   report["subject"]],
-        ["Timestamp", report["timestamp"][:19] + " UTC"],
-        ["SPF",       auth_str(auth["spf"])],
-        ["DKIM",      auth_str(auth["dkim"])],
-        ["DMARC",     auth_str(auth["dmarc"])],
-        ["Attachments", str(len(report.get("attachments", [])))],
+        ["Sender",    s.get("raw","—")],
+        ["Domain",    s.get("domain","—")],
+        ["Subject",   report.get("subject","—")],
+        ["Timestamp", report.get("timestamp","—")[:19] + " UTC"],
+        ["SPF",       _auth(auth.get("spf","none"))],
+        ["DKIM",      _auth(auth.get("dkim","none"))],
+        ["DMARC",     _auth(auth.get("dmarc","none"))],
+        ["Attachments", str(len(report.get("attachments",[])))],
     ]
+    t = Table(rows, colWidths=[3.5*cm, 13.5*cm])
+    t.setStyle(_ts())
+    return [Paragraph("Email Information", H2), t, Spacer(1,0.2*cm)]
 
-    t = Table(rows, colWidths=[4*cm, 13*cm])
-    t.setStyle(_table_style(C_DARK))
-    elements.append(t)
-    elements.append(Spacer(1, 0.3*cm))
+def _advanced_section(report):
+    adv = report.get("advanced", {})
+    if not adv:
+        return []
 
+    da = adv.get("domain_age",    {})
+    ip = adv.get("ip_reputation", {})
+    rd = adv.get("redirect",      {})
+    uc = adv.get("unicode",       {})
+    at = adv.get("attachment",    {})
 
-# ── URLs ────────────────────────────────────────────
-def _build_urls(elements, report, S):
+    rows = [["Check","Result","Score","Flags"]]
+
+    age_val = f"{da.get('age_days')} days" if da.get("age_days") \
+              else "Unknown"
+    rows.append([
+        "Domain Age",
+        f"{age_val} | Reg: {da.get('registrar') or '—'}",
+        f"{da.get('score',0)}/100",
+        ", ".join(da.get("flags",[])) or "None"
+    ])
+
+    rows.append([
+        "IP Reputation",
+        f"{ip.get('ip') or '—'} | {ip.get('reverse_dns') or '—'}",
+        f"{ip.get('score',0)}/100",
+        ", ".join(ip.get("flags",[])) or "None"
+    ])
+
+    hops = rd.get("hops", 0)
+    rows.append([
+        "Redirect Chain",
+        f"{hops} hop(s) → {rd.get('final_url','—')[:40]}",
+        f"{rd.get('score',0)}/100",
+        ", ".join(rd.get("flags",[])) or "None"
+    ])
+
+    rows.append([
+        "Unicode / Homograph",
+        f"Punycode: {'Yes' if uc.get('is_punycode') else 'No'} | "
+        f"Chars: {uc.get('suspicious_chars') or 'None'}",
+        f"{uc.get('score',0)}/100",
+        ", ".join(uc.get("flags",[])) or "None"
+    ])
+
+    att_files = at.get("scanned", [])
+    att_val   = f"{len(att_files)} file(s)" if att_files else "None"
+    rows.append([
+        "Attachments",
+        att_val,
+        f"{at.get('score',0)}/100",
+        ", ".join(at.get("flags",[])) or "None"
+    ])
+
+    t = Table(rows, colWidths=[3.5*cm, 7*cm, 2*cm, 4.5*cm])
+    t.setStyle(_ts())
+    return [Paragraph("Advanced Analysis", H2), t, Spacer(1,0.2*cm)]
+
+def _urls_section(report):
     urls = report.get("urls_analyzed", [])
     if not urls:
-        return
-
-    elements.append(Paragraph("🔗 URLs Analyzed", S["h2"]))
-
-    rows = [["URL", "Rule", "VT", "Engines", "URLhaus", "Verdict"]]
+        return []
+    rows = [["URL","Rule","VT","Engines","URLhaus","Verdict"]]
     for u in urls:
-        url_short = (u["url"][:50] + "...") if len(u["url"]) > 50 else u["url"]
-        urlhaus = "🔴 Listed" if u.get("urlhaus_listed") else "🟢 Clean"
+        url_s = u["url"][:45] + "…" if len(u["url"]) > 45 else u["url"]
+        uh    = "Listed" if u.get("urlhaus_listed") else "Clean"
         rows.append([
-            url_short,
-            f"{u['rule_score']}/100",
-            f"{u['vt_score']}/100",
-            str(u["malicious_engines"]),
-            urlhaus,
-            u["vt_verdict"],
+            Paragraph(url_s, CODE),
+            f"{u.get('rule_score',0)}/100",
+            f"{u.get('vt_score',0)}/100",
+            str(u.get("malicious_engines",0)),
+            uh,
+            u.get("vt_verdict","—"),
         ])
+    t = Table(rows, colWidths=[6*cm,2*cm,2*cm,2*cm,2*cm,3*cm])
+    t.setStyle(_ts())
+    return [Paragraph("URLs Analyzed", H2), t, Spacer(1,0.2*cm)]
 
-    t = Table(rows, colWidths=[6*cm, 2*cm, 2*cm, 2*cm, 2.5*cm, 2.5*cm])
-    t.setStyle(_table_style(C_DARK))
-    elements.append(t)
-    elements.append(Spacer(1, 0.3*cm))
-
-
-# ── Flags ───────────────────────────────────────────
-def _build_flags(elements, report, S):
-    elements.append(Paragraph("🚩 Detection Flags", S["h2"]))
-
+def _flags_section(report):
     flags = sorted(report.get("flags", []))
-    rows  = [["#", "Flag", "Category"]]
+    if not flags:
+        return []
+    rows = [["#","Flag","Category"]]
+    for i, f in enumerate(flags, 1):
+        rows.append([str(i), f, _flag_cat(f)])
+    t = Table(rows, colWidths=[1*cm, 12*cm, 4*cm])
+    t.setStyle(_ts())
+    return [Paragraph("Detection Flags", H2), t, Spacer(1,0.2*cm)]
 
-    categories = {
-        "spf": "Authentication", "dkim": "Authentication",
-        "dmarc": "Authentication", "reply_to": "Authentication",
-        "keyword": "Content", "urgency": "Content",
-        "credential": "Content", "impersonation": "Content",
-        "no_https": "URL", "ip_as": "URL",
-        "lookalike": "URL", "special": "URL",
-        "url": "URL",
-    }
-
-    for i, flag in enumerate(flags, 1):
-        cat = "General"
-        for key, val in categories.items():
-            if key in flag:
-                cat = val
-                break
-        rows.append([str(i), flag, cat])
-
-    t = Table(rows, colWidths=[1*cm, 11*cm, 5*cm])
-    t.setStyle(_table_style(C_DARK))
-    elements.append(t)
-    elements.append(Spacer(1, 0.3*cm))
-
-
-# ── MITRE ───────────────────────────────────────────
-def _build_mitre(elements, report, S):
-    elements.append(Paragraph("🗺️ MITRE ATT&CK Mapping", S["h2"]))
-
+def _mitre_section():
     rows = [
-        ["Technique ID", "Name", "Sub-technique", "Status"],
-        ["T1566",     "Phishing",                "—",                          "✅ Detected"],
-        ["T1566.001", "Spearphishing Link",       "URL in email body",          "✅ Detected"],
-        ["T1566.002", "Spearphishing Attachment", "Malicious attachment",       "⚠️ Monitored"],
-        ["T1598",     "Gather Victim Info",        "Credential harvesting page", "✅ Detected"],
+        ["Technique ID","Name","Sub-technique","Status"],
+        ["T1566",     "Phishing",                "—",
+         "✓ Detected"],
+        ["T1566.001", "Spearphishing Link",       "URL in body",
+         "✓ Detected"],
+        ["T1566.002", "Spearphishing Attachment", "Malicious file",
+         "⚠ Monitored"],
+        ["T1598",     "Gather Victim Info",        "Credential page",
+         "✓ Detected"],
     ]
+    t = Table(rows, colWidths=[3*cm,5.5*cm,5.5*cm,3*cm])
+    t.setStyle(_ts())
+    return [Paragraph("MITRE ATT&CK Mapping", H2), t, Spacer(1,0.2*cm)]
 
-    t = Table(rows, colWidths=[3*cm, 5*cm, 6*cm, 3*cm])
-    t.setStyle(_table_style(C_DARK))
-    elements.append(t)
-    elements.append(Spacer(1, 0.3*cm))
-
-
-# ── Recommendations ─────────────────────────────────
-def _build_recommendations(elements, report, S):
-    elements.append(Paragraph("✅ Recommended Actions", S["h2"]))
-
-    verdict = report["verdict"]
-    actions = [
-        ["Priority", "Action", "Status"],
-        ["🔴 HIGH",   "Block sender domain at email gateway",    "Immediate"],
-        ["🔴 HIGH",   "Quarantine email from all mailboxes",     "Immediate"],
-        ["🔴 HIGH",   "Block malicious URLs at firewall/proxy",  "Immediate"],
-        ["🟠 MEDIUM", "Notify affected recipients",              "Within 1hr"],
-        ["🟠 MEDIUM", "Submit IOCs to threat intel platform",    "Within 2hrs"],
-        ["🟡 LOW",    "Update email filtering rules",            "Today"],
-        ["🟡 LOW",    "Document incident in ticketing system",   "Today"],
+def _actions_section(report):
+    verdict = report.get("verdict","")
+    rows = [["Priority","Action","Timing"]]
+    acts = [
+        ("🔴 HIGH",   "Block sender domain at email gateway",   "Immediate"),
+        ("🔴 HIGH",   "Quarantine from all mailboxes",          "Immediate"),
+        ("🟠 MEDIUM", "Block malicious URLs at firewall/proxy", "Within 1hr"),
+        ("🟠 MEDIUM", "Notify affected recipients",             "Within 1hr"),
+        ("🟡 LOW",    "Submit IOCs to threat intel platform",   "Within 2hrs"),
+        ("🟢 LOW",    "Update email filtering rules",           "Today"),
     ]
-
     if verdict == "CRITICAL":
-        actions.insert(1, ["⛔ CRITICAL",
-                           "Escalate to Tier 2 SOC analyst",
-                           "Immediate"])
+        acts.insert(0,("⛔ CRITICAL",
+                       "Escalate to Tier 2 SOC analyst","Immediate"))
+    for p,a,ti in acts:
+        rows.append([p, a, ti])
+    t = Table(rows, colWidths=[3.5*cm,11*cm,2.5*cm])
+    t.setStyle(_ts())
+    return [Paragraph("Recommended Actions", H2), t, Spacer(1,0.2*cm)]
 
-    t = Table(actions, colWidths=[3*cm, 10*cm, 4*cm])
-    t.setStyle(_table_style(C_DARK))
-    elements.append(t)
-    elements.append(Spacer(1, 0.3*cm))
-
-
-# ── Footer ──────────────────────────────────────────
-def _build_footer(elements, S):
-    elements.append(Spacer(1, 0.5*cm))
-    elements.append(HRFlowable(
-        width="100%", thickness=1,
-        color=C_MUTED, spaceAfter=6
-    ))
-    footer = Table([[
+def _footer_section():
+    t = Table([[
+        Paragraph("PhishGuard — AMIT Graduate Project 2026", SMALL),
         Paragraph(
-            "AMIT Graduate Project — Phishing Detection & Analysis System",
-            S["muted"]
-        ),
-        Paragraph(
-            f"Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}",
-            ParagraphStyle("fr", fontSize=8,
-                           textColor=C_MUTED, alignment=TA_RIGHT)
-        ),
+            datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+            RIGHT),
     ]], colWidths=[10*cm, 7*cm])
-    footer.setStyle(TableStyle([
-        ("BACKGROUND",    (0, 0), (-1, -1), C_BG),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
+    t.setStyle(TableStyle([
+        ("LEFTPADDING", (0,0),(-1,-1), 0),
+        ("RIGHTPADDING",(0,0),(-1,-1), 0),
     ]))
-    elements.append(footer)
+    return [
+        Spacer(1, 0.4*cm),
+        HRFlowable(width="100%", thickness=0.5, color=LGRAY, spaceAfter=6),
+        t,
+    ]
 
-
-# ── Main ────────────────────────────────────────────
+# ── Main ───────────────────────────────────────────
 def generate_report(report: dict,
                     output_path: str = "reports/incident_report.pdf") -> str:
     os.makedirs("reports", exist_ok=True)
 
     doc = SimpleDocTemplate(
-        output_path,
-        pagesize=A4,
-        rightMargin=1.5*cm,
-        leftMargin=1.5*cm,
-        topMargin=1.5*cm,
-        bottomMargin=1.5*cm,
+        output_path, pagesize=A4,
+        leftMargin=1.5*cm, rightMargin=1.5*cm,
+        topMargin=1.5*cm,  bottomMargin=1.5*cm,
     )
 
-    # Dark background
-    def on_page(canvas, doc):
-        canvas.setFillColor(C_BG)
-        canvas.rect(0, 0, A4[0], A4[1], fill=1, stroke=0)
+    els = []
+    els += _header(report)
+    els += _verdict_banner(report)
+    els += _score_breakdown(report)
+    els += _email_info(report)
+    els += _advanced_section(report)
+    els += _urls_section(report)
+    els += _flags_section(report)
+    els += _mitre_section()
+    els += _actions_section(report)
+    els += _footer_section()
 
-    S        = _styles()
-    elements = []
-
-    _build_header(elements, report, S)
-    _build_verdict(elements, report, S)
-    _build_scores(elements, report, S)
-    _build_email_info(elements, report, S)
-    _build_urls(elements, report, S)
-    _build_flags(elements, report, S)
-    _build_mitre(elements, report, S)
-    _build_recommendations(elements, report, S)
-    _build_footer(elements, S)
-
-    doc.build(elements, onFirstPage=on_page, onLaterPages=on_page)
+    doc.build(els)
+    print(f"Report saved: {output_path}")
     return output_path
 
 
 if __name__ == "__main__":
+    import sys
     from modules.risk_engine import run_analysis
-    report = run_analysis("data/test.eml")
-    path   = generate_report(report)
-    print(f"✅ Report saved: {path}")
+    path   = sys.argv[1] if len(sys.argv) > 1 else "data/test.eml"
+    report = run_analysis(path)
+    generate_report(report)

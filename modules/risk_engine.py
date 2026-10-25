@@ -5,6 +5,7 @@ from modules.ml_classifier import predict  # ← جديد
 from modules.content_analyzer import analyze_content
 from datetime import datetime
 from modules.threat_intel import check_urls_list, check_urlhaus_list
+from modules.advanced_analyzer import run_advanced_analysis
 
 
 def run_analysis(eml_path: str) -> dict:
@@ -27,6 +28,12 @@ def run_analysis(eml_path: str) -> dict:
     # 5 — URLhaus
     urlhaus_results = check_urlhaus_list(email_data.get("urls", []))
 
+    # 5 — Advanced Analysis
+    advanced = run_advanced_analysis(
+        email_data,
+        email_data.get("urls", [])
+    )
+
     # 6 — دمج نتائج URL + VT + URLhaus
     combined_urls = _merge_url_results(url_results, vt_results, urlhaus_results)
 
@@ -48,12 +55,13 @@ def run_analysis(eml_path: str) -> dict:
 
     # 9 — Final Score
     final_score = int(
-        header_result["score"]  * 0.25 +
-        content_result["score"] * 0.20 +
-        url_score               * 0.20 +
-        vt_score                * 0.15 +
-        urlhaus_score           * 0.10 +
-        ml_result["ml_score"]   * 0.10
+        header_result["score"]  * 0.22 +
+        content_result["score"] * 0.18 +
+        url_score               * 0.18 +
+        vt_score                * 0.14 +
+        urlhaus_score           * 0.08 +
+        ml_result["ml_score"]   * 0.10 +
+        advanced["score"]       * 0.10
     )
     final_score = min(final_score, 100)
 
@@ -70,6 +78,7 @@ def run_analysis(eml_path: str) -> dict:
     # 9 — كل الـ flags
     all_flags = header_result["flags"].copy()
     all_flags += content_result["flags"]
+    all_flags += advanced["flags"]
     for url in combined_urls:
         all_flags.extend(url["flags"])
 
@@ -79,12 +88,13 @@ def run_analysis(eml_path: str) -> dict:
         "final_score": final_score,
         "verdict": verdict,
         "breakdown": {
-            "header_score": header_result["score"],
-            "content_score": content_result["score"],
-            "url_score":    url_score,
-            "vt_score":     vt_score,
-            "urlhaus_score": urlhaus_score,
-            "ml_score":     ml_result["ml_score"],
+            "header_score":   header_result["score"],
+            "content_score":  content_result["score"],
+            "url_score":      url_score,
+            "vt_score":       vt_score,
+            "urlhaus_score":  urlhaus_score,
+            "ml_score":       ml_result["ml_score"],
+            "advanced_score": advanced["score"],
         },
         "flags":         list(set(all_flags)),
         "sender":        email_data["sender"],
@@ -92,6 +102,7 @@ def run_analysis(eml_path: str) -> dict:
         "urls_analyzed": combined_urls,
         "auth_results":  email_data["auth_results"],
         "attachments":   email_data["attachments"],
+        "advanced": advanced,
     }
 
 

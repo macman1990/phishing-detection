@@ -162,6 +162,126 @@ def check_urlhaus_list(urls: list) -> list:
         time.sleep(0.5)
     return results
 
+
+def check_phishtank(url: str) -> dict:
+    try:
+        response = requests.post(
+            "https://checkurl.phishtank.com/checkurl/",
+            data={"url": url, "format": "json"},
+            headers={"User-Agent": "phishtank/PhishGuard"},
+            timeout=10
+        )
+        data = response.json()
+        results = data.get("results", {})
+        in_database = results.get("in_database", False)
+        verified    = results.get("verified",    False)
+        if in_database and verified:
+            verdict, score = "Phishing", 100
+        elif in_database:
+            verdict, score = "Suspicious", 60
+        else:
+            verdict, score = "Clean", 0
+        return {
+            "url": url, "listed": in_database,
+            "verified": verified, "verdict": verdict,
+            "score": score,
+            "phishtank_url": results.get("phish_detail_page",""),
+            "error": None,
+        }
+    except Exception as e:
+        return {"url": url, "listed": False, "verified": False,
+                "verdict": "Unknown", "score": 0, "error": str(e)}
+
+
+def check_google_safebrowsing(url: str, api_key: str = None) -> dict:
+    if not api_key:
+        from config import GOOGLE_API_KEY
+        api_key = GOOGLE_API_KEY
+    if not api_key or api_key == "YOUR_GOOGLE_KEY":
+        return {"url": url, "threats": [], "verdict": "Unknown",
+                "score": 0, "error": "No API key"}
+    try:
+        body = {
+            "client": {"clientId": "PhishGuard", "clientVersion": "1.0"},
+            "threatInfo": {
+                "threatTypes": ["MALWARE","SOCIAL_ENGINEERING",
+                                "UNWANTED_SOFTWARE",
+                                "POTENTIALLY_HARMFUL_APPLICATION"],
+                "platformTypes":    ["ANY_PLATFORM"],
+                "threatEntryTypes": ["URL"],
+                "threatEntries":    [{"url": url}]
+            }
+        }
+        response = requests.post(
+            f"https://safebrowsing.googleapis.com/v4/threatMatches:find"
+            f"?key={api_key}",
+            json=body, timeout=10
+        )
+        matches = response.json().get("matches", [])
+        if matches:
+            return {"url": url,
+                    "threats": [m.get("threatType","") for m in matches],
+                    "verdict": "Malicious", "score": 100, "error": None}
+        return {"url": url, "threats": [], "verdict": "Clean",
+                "score": 0, "error": None}
+    except Exception as e:
+        return {"url": url, "threats": [], "verdict": "Unknown",
+                "score": 0, "error": str(e)}
+
+
+def full_url_check(url: str) -> dict:
+    vt  = check_url(url) or {}
+    uh  = check_urlhaus(url) or {}
+    pt  = check_phishtank(url) or {}
+    gsb = check_google_safebrowsing(url) or {}
+    urlhaus_listed = uh.get("listed", False)
+    scores = [
+        vt.get("vt_score", 0),
+        100 if urlhaus_listed else 0,
+        pt.get("score", 0),
+        gsb.get("score", 0),
+    ]
+    combined = int(sum(scores) / len(scores)) if scores else 0
+    malicious_count = sum([
+        1 if vt.get("verdict", "Unknown") == "Malicious" else 0,
+        1 if urlhaus_listed else 0,
+        1 if pt.get("verdict", "Unknown") == "Phishing" else 0,
+        1 if gsb.get("verdict", "Unknown") == "Malicious" else 0,
+    ])
+    if malicious_count >= 2 or combined >= 70:
+        final_verdict = "Malicious"
+    elif malicious_count >= 1 or combined >= 40:
+        final_verdict = "Suspicious"
+    else:
+        final_verdict = "Clean"
+    return {
+        "url": url, "combined_score": combined,
+        "final_verdict": final_verdict,
+        "malicious_count": malicious_count,
+        "sources": {
+            "virustotal": {
+                **vt,
+                "vt_score": vt.get("vt_score", 0),
+                "verdict": vt.get("verdict", "Unknown"),
+            },
+            "urlhaus": {
+                **uh,
+                "listed": urlhaus_listed,
+            },
+            "phishtank": {
+                **pt,
+                "score": pt.get("score", 0),
+                "verdict": pt.get("verdict", "Unknown"),
+            },
+            "google_safebrowsing": {
+                **gsb,
+                "score": gsb.get("score", 0),
+                "verdict": gsb.get("verdict", "Unknown"),
+            },
+        }
+    }
+
+
 if __name__ == "__main__":
     import json
 

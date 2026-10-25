@@ -1,6 +1,9 @@
 import os
+from dotenv import load_dotenv
+load_dotenv()
 
 VIRUSTOTAL_API_KEY = os.getenv("VIRUSTOTAL_API_KEY", "YOUR_VT_KEY_HERE")
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
 SIEM_HOST = os.getenv("SIEM_HOST", "localhost")
 SIEM_PORT = int(os.getenv("SIEM_PORT", "514"))
 MODEL_PATH   = "data/model.pkl"
